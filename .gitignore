@@ -109,3 +109,8 @@ tools/docfx/
 /src/Umbraco.Cms/appsettings-schema.json
 playwright-report
 trace.zip
+/src/Umbraco.Community.Sustainability.TestSite/appsettings-schema.json
+/src/Umbraco.Community.Sustainability.TestSite/appsettings-schema.Umbraco.Cms.json
+/src/Umbraco.Community.Sustainability.TestSite/umbraco-package-schema.json
+/src/Umbraco.Community.Sustainability.TestSite/umbraco/Data/
+/src/Umbraco.Community.Sustainability.TestSite/umbraco/Logs/
