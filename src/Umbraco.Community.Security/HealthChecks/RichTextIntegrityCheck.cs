@@ -1,4 +1,7 @@
 using System.Text;
+using AngleSharp;
+using AngleSharp.Html;
+using AngleSharp.Html.Parser;
 using Umbraco.Cms.Core.HealthChecks;
 using Umbraco.Cms.Core.Models;
 using Umbraco.Cms.Core.Scoping;
@@ -36,14 +39,17 @@ public class RichTextIntegrityCheck : HealthCheck
     /// <inheritdoc />
     public override async Task<IEnumerable<HealthCheckStatus>> GetStatus()
     {
+        var cancellationToken = CancellationToken.None;
         using ICoreScope scope = _coreScopeProvider.CreateCoreScope();
-        IEnumerable<IRichTextIntegrityCheckModel> allRichTextContent = await _richTextIntegrityCheckRepository.GetDataAsync(CancellationToken.None);
+        // TODO this should get content from rich text editors in blocks too.
+        IEnumerable<IRichTextIntegrityCheckModel> allRichTextContent = await _richTextIntegrityCheckRepository.GetDataAsync(cancellationToken);
 
         var propertyAliasWithConflict = new List<IRichTextIntegrityCheckModel>();
-        Parallel.ForEach(allRichTextContent, richTextContent =>
+        
+        await Parallel.ForEachAsync(allRichTextContent, cancellationToken, async (richTextContent, token) =>
         {
             var sanitizedContent = _htmlSanitizer.Sanitize(richTextContent.Value);
-            if (string.Equals(sanitizedContent, richTextContent.Value) is false)
+            if (await AreHtmlEqualAsync(sanitizedContent, richTextContent.Value, token) is false)
             {
                 propertyAliasWithConflict.Add(richTextContent);
             }
@@ -62,11 +68,26 @@ public class RichTextIntegrityCheck : HealthCheck
 
         return
         [
-            new HealthCheckStatus(await GetReportAsync(propertyAliasWithConflict, CancellationToken.None))
+            new HealthCheckStatus(await GetReportAsync(propertyAliasWithConflict, cancellationToken))
             {
                 ResultType = StatusResultType.Warning,
             },
         ];
+    }
+
+    private async Task<bool> AreHtmlEqualAsync(string originalValue, string updatedValue, CancellationToken cancellationToken)
+    {
+        var htmlParser = new HtmlParser();
+        var originalParsed = await htmlParser.ParseDocumentAsync(originalValue, cancellationToken);
+        var updatedParsed = await htmlParser.ParseDocumentAsync(updatedValue, cancellationToken);
+        
+        var originalSb = new StringBuilder();
+        await originalParsed.ToHtmlAsync(new StringWriter(originalSb));
+        
+        var updatedSb = new StringBuilder();
+        await updatedParsed.ToHtmlAsync(new StringWriter(updatedSb));
+        
+        return Equals(originalSb.ToString(), updatedSb.ToString());
     }
 
     private async Task<string> GetReportAsync(IList<IRichTextIntegrityCheckModel> conflictingRichTextValues, CancellationToken cancellationToken)
